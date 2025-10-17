@@ -5,9 +5,73 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
   const [selectedModel, setSelectedModel] = useState<any>(null);
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+  const [bookingForm, setBookingForm] = useState({
+    name: '',
+    phone: '',
+    date: '',
+    tariff: ''
+  });
+  const { toast } = useToast();
+
+  const handlePayment = async () => {
+    if (!bookingForm.name || !bookingForm.phone || !bookingForm.date || !bookingForm.tariff) {
+      toast({
+        title: 'Ошибка',
+        description: 'Заполните все поля',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsPaymentProcessing(true);
+
+    try {
+      const tariffPrices: Record<string, number> = {
+        'standard': 12000,
+        'premium': 20000,
+        'exclusive': 50000
+      };
+
+      const amount = tariffPrices[bookingForm.tariff] || selectedModel?.price || 15000;
+
+      const response = await fetch('https://functions.poehali.dev/c445b8a9-7664-4379-bc2a-737d8076b639', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount,
+          description: `Бронирование ${selectedModel?.name} - ${bookingForm.tariff}`,
+          orderId: `order-${Date.now()}`
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        toast({
+          title: 'Ошибка платежа',
+          description: data.error || 'Не удалось создать платёж',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Проблема с подключением к платёжному сервису',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsPaymentProcessing(false);
+    }
+  };
 
   const models = [
     {
@@ -241,31 +305,45 @@ const Index = () => {
                                 <input 
                                   type="text" 
                                   placeholder="Ваше имя"
+                                  value={bookingForm.name}
+                                  onChange={(e) => setBookingForm({...bookingForm, name: e.target.value})}
                                   className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none"
                                 />
                                 <input 
                                   type="tel" 
                                   placeholder="Телефон"
+                                  value={bookingForm.phone}
+                                  onChange={(e) => setBookingForm({...bookingForm, phone: e.target.value})}
                                   className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none"
                                 />
                                 <input 
                                   type="date" 
+                                  value={bookingForm.date}
+                                  onChange={(e) => setBookingForm({...bookingForm, date: e.target.value})}
                                   className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none"
                                 />
-                                <select className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none">
-                                  <option>Выберите тариф</option>
-                                  <option>Стандарт - 2 часа</option>
-                                  <option>Премиум - 4 часа</option>
-                                  <option>Эксклюзив - 12 часов</option>
+                                <select 
+                                  value={bookingForm.tariff}
+                                  onChange={(e) => setBookingForm({...bookingForm, tariff: e.target.value})}
+                                  className="w-full px-4 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none"
+                                >
+                                  <option value="">Выберите тариф</option>
+                                  <option value="standard">Стандарт - 2 часа (12 000 ₽)</option>
+                                  <option value="premium">Премиум - 4 часа (20 000 ₽)</option>
+                                  <option value="exclusive">Эксклюзив - 12 часов (50 000 ₽)</option>
                                 </select>
                               </div>
-                              <Button className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+                              <Button 
+                                className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                                onClick={handlePayment}
+                                disabled={isPaymentProcessing}
+                              >
                                 <Icon name="CreditCard" size={16} className="mr-2" />
-                                Оплатить онлайн
+                                {isPaymentProcessing ? 'Обработка...' : 'Оплатить онлайн'}
                               </Button>
                               <p className="text-xs text-center text-muted-foreground">
                                 <Icon name="Shield" size={12} className="inline mr-1" />
-                                Безопасная оплата через защищенное соединение
+                                Безопасная оплата через ЮKassa
                               </p>
                             </div>
                           </DialogContent>
